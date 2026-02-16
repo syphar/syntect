@@ -5,13 +5,13 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::ops::DerefMut;
 use std::path::Path;
-use yaml_rust::yaml::Hash;
-use yaml_rust::{ScanError, Yaml, YamlLoader};
+use yaml_rust2::yaml::Hash;
+use yaml_rust2::{ScanError, Yaml, YamlLoader};
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ParseSyntaxError {
-    /// Invalid YAML file syntax, or at least something yaml_rust can't handle
+    /// Invalid YAML file syntax, or at least something yaml_rust2 can't handle
     #[error("Invalid YAML file syntax: {0}")]
     InvalidYaml(#[from] ScanError),
     /// The file must contain at least one YAML document

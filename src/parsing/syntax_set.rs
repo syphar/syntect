@@ -1081,25 +1081,7 @@ mod tests {
         };
 
         let mut builder = syntax_set_original.into_builder();
-
-        let syntax_c = SyntaxDefinition::load_from_str(
-            r#"
-        name: C
-        scope: source.c
-        file_extensions: [c]
-        contexts:
-          main:
-            - match: 'c'
-              scope: c
-            - match: 'go_a'
-              push: scope:source.a#main
-        "#,
-            true,
-            None,
-        )
-        .unwrap();
-
-        builder.add(syntax_c);
+        builder.add(syntax_c());
 
         let syntax_set = builder.build();
 
@@ -1171,6 +1153,30 @@ mod tests {
             (18, ScopeStackOp::Pop(1)),
         ];
         assert_eq!(ops, expected_ops);
+    }
+
+    #[test]
+    fn merge_syntax_set_via_builder() {
+        let syntax_set = {
+            let mut builder = SyntaxSetBuilder::new();
+            builder.add(syntax_a());
+            builder.add(syntax_b());
+            builder.build()
+        };
+
+        let unlinked_contexts = syntax_set.find_unlinked_contexts();
+        assert_eq!(unlinked_contexts.len(), 0);
+
+        let syntax_set = {
+            let mut builder = SyntaxSetBuilder::new();
+            builder.add(syntax_a());
+            builder.build()
+        };
+
+        let unlinked_contexts: Vec<String> =
+            syntax_set.find_unlinked_contexts().into_iter().collect();
+        assert_eq!(unlinked_contexts.len(), 1);
+        assert_eq!(unlinked_contexts[0], "Syntax 'A' with scope 'source.a' has unresolved context reference ByScope { scope: <source.b>, sub_context: Some(\"main\"), with_escape: false }");
     }
 
     #[test]
@@ -1275,26 +1281,7 @@ mod tests {
             .unwrap();
 
             builder.add(syntax_a2);
-
-            let syntax_c = SyntaxDefinition::load_from_str(
-                r#"
-                name: C
-                scope: source.c
-                file_extensions: [c]
-                first_line_match: syntax\s+.*
-                contexts:
-                  main:
-                    - match: c
-                      scope: c
-                    - match: go_a
-                      push: scope:source.a#main
-                "#,
-                true,
-                None,
-            )
-            .unwrap();
-
-            builder.add(syntax_c);
+            builder.add(syntax_c());
 
             builder.build()
         };
@@ -1483,6 +1470,26 @@ mod tests {
               main:
                 - match: 'b'
                   scope: b
+            "#,
+            true,
+            None,
+        )
+        .unwrap()
+    }
+
+    fn syntax_c() -> SyntaxDefinition {
+        SyntaxDefinition::load_from_str(
+            r#"
+            name: C
+            scope: source.c
+            file_extensions: [c]
+            first_line_match: syntax\s+.*
+            contexts:
+              main:
+                - match: 'c'
+                  scope: c
+                - match: 'go_a'
+                  push: scope:source.a#main
             "#,
             true,
             None,

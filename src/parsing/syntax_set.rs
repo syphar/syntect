@@ -339,8 +339,14 @@ impl SyntaxSet {
         }
 
         let mut builder_syntaxes = Vec::with_capacity(syntaxes.len());
+        let mut context_refs = HashMap::new();
+        for (syntax_index, syntax) in syntaxes.iter().enumerate() {
+            for (name, id) in syntax.context_ids() {
+                context_refs.insert(*id, (syntax_index, syntax.scope, name.clone()));
+            }
+        }
 
-        for syntax in syntaxes {
+        for (syntax_index, syntax) in syntaxes.into_iter().enumerate() {
             let SyntaxReference {
                 name,
                 file_extensions,
@@ -356,6 +362,8 @@ impl SyntaxSet {
             let mut builder_contexts = HashMap::with_capacity(lazy_contexts.context_ids.len());
             for (name, context_id) in lazy_contexts.context_ids {
                 if let Some(context) = context_map.remove(&context_id) {
+                    let mut context = context;
+                    Self::normalize_context_refs(&mut context, syntax_index, &context_refs);
                     builder_contexts.insert(name, context);
                 }
             }
@@ -379,6 +387,59 @@ impl SyntaxSet {
             existing_metadata: Some(metadata),
             #[cfg(feature = "metadata")]
             raw_metadata: LoadMetadata::default(),
+        }
+    }
+
+    fn normalize_context_refs(
+        context: &mut Context,
+        syntax_index: usize,
+        context_ref_lookup: &HashMap<ContextId, (usize, Scope, String)>,
+    ) {
+        context.prototype = None;
+        for pattern in &mut context.patterns {
+            match pattern {
+                Pattern::Match(match_pattern) => {
+                    let maybe_context_refs = match &mut match_pattern.operation {
+                        MatchOperation::Push(refs) | MatchOperation::Set(refs) => Some(refs),
+                        MatchOperation::Pop(_) | MatchOperation::None => None,
+                    };
+                    if let Some(refs) = maybe_context_refs {
+                        for context_ref in refs {
+                            Self::normalize_context_ref(
+                                context_ref,
+                                syntax_index,
+                                context_ref_lookup,
+                            );
+                        }
+                    }
+                    if let Some(context_ref) = &mut match_pattern.with_prototype {
+                        Self::normalize_context_ref(context_ref, syntax_index, context_ref_lookup);
+                    }
+                }
+                Pattern::Include(context_ref) => {
+                    Self::normalize_context_ref(context_ref, syntax_index, context_ref_lookup);
+                }
+            }
+        }
+    }
+
+    fn normalize_context_ref(
+        context_ref: &mut ContextReference,
+        syntax_index: usize,
+        context_refs: &HashMap<ContextId, (usize, Scope, String)>,
+    ) {
+        if let ContextReference::Direct(id) = context_ref {
+            if let Some((target_syntax_index, target_scope, target_name)) = context_refs.get(id) {
+                *context_ref = if *target_syntax_index == syntax_index {
+                    ContextReference::Named(target_name.clone())
+                } else {
+                    ContextReference::ByScope {
+                        scope: *target_scope,
+                        sub_context: Some(target_name.clone()),
+                        with_escape: false,
+                    }
+                };
+            }
         }
     }
 
@@ -1050,7 +1111,7 @@ mod tests {
             builder.add(syntax.clone());
         }
 
-        let ps = builder.build();
+        let _ps = builder.build();
     }
 
     #[test]

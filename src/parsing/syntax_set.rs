@@ -1038,6 +1038,22 @@ mod tests {
     }
 
     #[test]
+    fn can_load_merge() {
+        let defaults = SyntaxSet::load_defaults_nonewlines();
+        let mut builder = defaults.into_builder();
+
+        for syntax in testdata::PACKAGES_SYN_SET
+            .to_owned()
+            .into_builder()
+            .syntaxes()
+        {
+            builder.add(syntax.clone());
+        }
+
+        let ps = builder.build();
+    }
+
+    #[test]
     fn can_clone() {
         let cloned_syntax_set = {
             let mut builder = SyntaxSetBuilder::new();
@@ -1157,26 +1173,34 @@ mod tests {
 
     #[test]
     fn merge_syntax_set_via_builder() {
-        let syntax_set = {
+        let mut builder = {
             let mut builder = SyntaxSetBuilder::new();
             builder.add(syntax_a());
             builder.add(syntax_b());
             builder.build()
-        };
+        }
+        .into_builder();
 
-        let unlinked_contexts = syntax_set.find_unlinked_contexts();
-        assert_eq!(unlinked_contexts.len(), 0);
-
-        let syntax_set = {
+        let more_syntaxes = {
             let mut builder = SyntaxSetBuilder::new();
-            builder.add(syntax_a());
+            builder.add(syntax_c());
             builder.build()
         };
 
-        let unlinked_contexts: Vec<String> =
-            syntax_set.find_unlinked_contexts().into_iter().collect();
-        assert_eq!(unlinked_contexts.len(), 1);
-        assert_eq!(unlinked_contexts[0], "Syntax 'A' with scope 'source.a' has unresolved context reference ByScope { scope: <source.b>, sub_context: Some(\"main\"), with_escape: false }");
+        for syn in more_syntaxes.into_builder().syntaxes() {
+            builder.add(syn.clone());
+        }
+
+        let result = builder.build();
+
+        assert_eq!(
+            result
+                .syntaxes()
+                .iter()
+                .map(|s| &s.name)
+                .collect::<Vec<_>>(),
+            vec!["A", "B", "C"]
+        );
     }
 
     #[test]
